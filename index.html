@@ -14,7 +14,10 @@
             }
             /* custom class */
             .gantt .bar-milestone .bar {
-                fill: tomato;
+                fill: purple !important;
+            }
+            .gantt .red_bar .bar {
+                fill: red !important;
             }
             .heading {
                 text-align: center;
@@ -44,6 +47,7 @@
                     repeating: true,
                     frequency: 5,
                     until: 3,
+                    custom_class: 'red_bar',
                 },
                 {
                     start: '2024-03-26',

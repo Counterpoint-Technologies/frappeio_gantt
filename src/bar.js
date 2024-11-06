@@ -189,6 +189,8 @@ export default class Bar {
                 rx: this.corner_radius,
                 ry: this.corner_radius,
                 class: 'bar repeating',
+                "is-repeating": true,
+                "repat-instance": repeat_count,
                 append_to: this.bar_group,
             });
     
@@ -341,7 +343,11 @@ export default class Bar {
                 'none';
         });
 
-        $.on(this.group, 'click', () => {
+        $.on(this.group, 'click', (e) => {
+            if (e.target.classList.contains('repeating') || e.target.getAttribute('is-repeating') === 'true') {
+                this.task.is_repeat = true;
+                this.task.repeating_instance = e.target.getAttribute('repat-instance');
+            } 
             this.gantt.trigger_event('click', [this.task]);
         });
 
@@ -354,6 +360,11 @@ export default class Bar {
             if (this.gantt.popup)
                 this.gantt.popup.parent.classList.remove('hidden');
 
+            if (e.target.classList.contains('repeating') || e.target.getAttribute('is-repeating') === 'true') {
+                this.task.is_repeat = true;
+                this.task.repeating_instance = e.target.getAttribute('repat-instance');
+            } 
+            
             this.gantt.trigger_event('double_click', [this.task]);
         });
     }
