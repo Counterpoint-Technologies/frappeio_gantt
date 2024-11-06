@@ -5,6 +5,7 @@ export default class Popup {
         this.make();
     }
 
+    /// TODO add optional element to show if it is a repeating task, show an icon and show the repition number. Probably add it and then hide use css display none,
     make() {
         this.parent.innerHTML = `
             <div class="title"></div>
