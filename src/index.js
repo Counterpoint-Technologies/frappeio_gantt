@@ -202,6 +202,13 @@ export default class Gantt {
                 task.id = `${task.id}`;
             }
 
+            // Add the repeating flag
+            task.repeating = task.repeating || false;
+            if(task.repeating) {
+                task.frequency = task.frequency || '30'; // 30 days as adefault
+                task.until = task.until || null; // it will render the next 4 occurences by default
+            }
+
             return task;
         });
 

@@ -304,4 +304,11 @@
     & .hide {
         display: none;
     }
+
+    .bar.repeating {
+        fill: #ffcc00; /* Example fill color */
+        stroke: #ff9900; /* Example stroke color */
+        stroke-width: 2px; /* Example stroke width */
+        opacity: 0.7; /* Example opacity */
+    }
 }

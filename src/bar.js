@@ -89,6 +89,10 @@ export default class Bar {
         if (this.task.thumbnail) {
             this.draw_thumbnail();
         }
+
+        if (this.task.repeating) {
+            this.draw_repeating_bar(); // Call the new function here
+        }
     }
 
     draw_bar() {
@@ -165,6 +169,41 @@ export default class Bar {
         this.gantt.$lower_header.prepend($date_highlight);
 
         animateSVG(this.$bar_progress, 'width', 0, this.progress_width);
+    }
+
+    draw_repeating_bar(repeat_count = 1) {
+        if (this.task.repeating) {
+            const frequency = parseInt(this.task.frequency, 10) || 30; // Default to 30 days if frequency is not set
+            const frequencyInMs = frequency * 24 * 60 * 60 * 1000; // Convert days to milliseconds
+            const newStartDate = new Date(this.task._start.getTime() + (frequencyInMs * repeat_count));
+            const newEndDate = new Date(this.task._end.getTime() + (frequencyInMs * repeat_count));
+    
+            const newX = this.gantt.options.column_width * (date_utils.diff(newStartDate, this.gantt.gantt_start, 'day'));
+            const newWidth = this.gantt.options.column_width * (date_utils.diff(newEndDate, newStartDate, 'day'));
+    
+            this.$repeating_bar = createSVG('rect', {
+                x: newX,
+                y: this.y,
+                width: newWidth,
+                height: this.height,
+                rx: this.corner_radius,
+                ry: this.corner_radius,
+                class: 'bar repeating',
+                append_to: this.bar_group,
+            });
+    
+            animateSVG(this.$repeating_bar, 'width', 0, newWidth);
+
+            // check the "task.until" parameter
+            if(this.task.until === null || this.task.until === undefined) {
+                this.task.until = 4;
+            }
+
+            repeat_count++;
+            if(repeat_count <= this.task.until) {
+                this.draw_repeating_bar(repeat_count);
+            }
+        }
     }
 
     draw_label() {
@@ -374,6 +413,41 @@ export default class Bar {
         }
         this.update_progressbar_position();
         this.update_arrow_position();
+
+        // Update repeating bars
+        this.update_repeating_bars();
+    }
+
+    update_repeating_bars() {
+        if (this.task.repeating) {
+            const frequency = parseInt(this.task.frequency, 10) || 30; // Default to 30 days if frequency is not set
+            const frequencyInMs = frequency * 24 * 60 * 60 * 1000; // Convert days to milliseconds
+    
+            // Remove existing repeating bars
+            this.bar_group.querySelectorAll('.repeating').forEach(bar => bar.remove());
+    
+            // Draw new repeating bars
+            for (let i = 1; i <= this.task.until; i++) { // Example: draw 4 repeating bars
+                const newStartDate = new Date(this.task._start.getTime() + (frequencyInMs * i));
+                const newEndDate = new Date(this.task._end.getTime() + (frequencyInMs * i));
+    
+                const newX = this.gantt.options.column_width * (date_utils.diff(newStartDate, this.gantt.gantt_start, 'day'));
+                const newWidth = this.gantt.options.column_width * (date_utils.diff(newEndDate, newStartDate, 'day'));
+    
+                const repeatingBar = createSVG('rect', {
+                    x: newX,
+                    y: this.y,
+                    width: newWidth,
+                    height: this.height,
+                    rx: this.corner_radius,
+                    ry: this.corner_radius,
+                    class: 'bar repeating',
+                    append_to: this.bar_group,
+                });
+    
+                animateSVG(repeatingBar, 'width', 0, newWidth);
+            }
+        }
     }
 
     update_label_position_on_horizontal_scroll({ x, sx }) {
