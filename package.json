@@ -47,6 +47,7 @@
         "eslint": "^4.17.0",
         "eslint-config-prettier": "^2.9.0",
         "eslint-plugin-prettier": "^2.6.0",
+        "identity-obj-proxy": "^3.0.0",
         "jest": "^22.2.1",
         "postcss-nesting": "^12.1.2",
         "prettier": "3.2.5",
@@ -55,5 +56,12 @@
     "eslintIgnore": [
         "dist"
     ],
-    "packageManager": "yarn@1.22.22"
+    "packageManager": "yarn@1.22.22",
+    "jest": {
+        "transform": {},
+        "moduleNameMapper": {
+            "\\.(css|less|scss|sass)$": "identity-obj-proxy"
+        },
+        "testEnvironment": "jsdom"
+    }
 }

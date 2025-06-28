@@ -48,17 +48,37 @@ const DEFAULT_OPTIONS = {
     auto_move_label: true,
     today_button: true,
     view_mode_select: false,
+    auto_refresh_on_reassign: false, // New option for auto-refresh
 };
 
 export default class Gantt {
-    constructor(wrapper, tasks, options) {
+    constructor(wrapper, tasks_data, options) {
         this.setup_wrapper(wrapper);
         this.setup_options(options);
-        this.setup_tasks(tasks);
+        this._tasks = []; // Internal tasks array
+        this.setup_tasks(tasks_data); // This will populate this._tasks
         // initialize with default view mode
         this.change_view_mode();
         this.bind_events();
     }
+
+    // Getter for tasks
+    get tasks() {
+        return this._tasks;
+    }
+
+    // Setter for tasks
+    set tasks(new_raw_tasks_array) {
+        // When tasks are reassigned, we process them.
+        // setup_tasks will update this._tasks internally.
+        this.setup_tasks(new_raw_tasks_array);
+        if (this.options.auto_refresh_on_reassign) {
+            // change_view_mode will use the newly set this._tasks by calling render()
+            // which in turn uses this.tasks (the getter for this._tasks)
+            this.change_view_mode();
+        }
+    }
+
 
     setup_wrapper(element) {
         let svg_element, wrapper_element;
@@ -121,34 +141,61 @@ export default class Gantt {
             ...VIEW_MODE_PADDING,
             ...options.view_mode_padding,
         };
+
+        // Initialize property_map
+        this.options.property_map = this.options.property_map || {};
     }
 
     setup_tasks(tasks) {
+        // Helper to get task property value using map or default
+        const get_task_value = (task, default_prop_name) => {
+            const mapped_prop_name = this.options.property_map[default_prop_name];
+            if (mapped_prop_name && task[mapped_prop_name] !== undefined) {
+                return task[mapped_prop_name];
+            }
+            return task[default_prop_name];
+        };
+
         // prepare tasks
-        this.tasks = tasks.map((task, i) => {
+        // The input `tasks` here is the raw task data array.
+        // The output of map will be assigned to this._tasks.
+        this._tasks = tasks.map((original_task_data, i) => {
+            // Create a new task object to avoid mutating original data and to store mapped values
+            const task = {};
+
+            // Apply mapping for all relevant properties
+            // Core properties needed for date calculations first
+            task.start = get_task_value(original_task_data, 'start');
+            task.end = get_task_value(original_task_data, 'end');
+            task.duration = get_task_value(original_task_data, 'duration');
+
             // convert to Date objects
             task._start = date_utils.parse(task.start);
             if (task.end === undefined && task.duration !== undefined) {
-                task.end = task._start;
-                let durations = task.duration.split(' ');
+                task._end = task._start; // Initialize _end with _start before adding duration
+                let durations = String(task.duration).split(' ');
 
                 durations.forEach((tmpDuration) => {
                     let { duration, scale } =
                         date_utils.parse_duration(tmpDuration);
-                    task.end = date_utils.add(task.end, duration, scale);
+                    task._end = date_utils.add(task._end, duration, scale);
                 });
+                 task.end = date_utils.to_string(task._end); // Store the calculated end date string back if needed
+            } else {
+                 task._end = date_utils.parse(task.end);
             }
-            task._end = date_utils.parse(task.end);
+
             let diff = date_utils.diff(task._end, task._start, 'year');
             if (diff < 0) {
                 throw Error(
                     "start of task can't be after end of task: in task #, " +
-                        (i + 1),
+                        (i + 1) + " -- Name: " + get_task_value(original_task_data, 'name')
                 );
             }
             // make task invalid if duration too large
             if (date_utils.diff(task._end, task._start, 'year') > 10) {
-                task.end = null;
+                task.end = null; // This will mark it as invalid later
+                task._end = null;
             }
 
             // cache index
@@ -161,19 +208,21 @@ export default class Gantt {
                 task._end = date_utils.add(today, 2, 'day');
             }
 
-            if (!task.start && task.end) {
+            if (!task.start && task.end && task._end) {
                 task._start = date_utils.add(task._end, -2, 'day');
             }
 
-            if (task.start && !task.end) {
+            if (task.start && !task.end && task._start) {
                 task._end = date_utils.add(task._start, 2, 'day');
             }
 
             // if hours is not set, assume the last day is full day
             // e.g: 2018-09-09 becomes 2018-09-09 23:59:59
-            const task_end_values = date_utils.get_date_values(task._end);
-            if (task_end_values.slice(3).every((d) => d === 0)) {
-                task._end = date_utils.add(task._end, 24, 'hour');
+            if (task._end) {
+                const task_end_values = date_utils.get_date_values(task._end);
+                if (task_end_values.slice(3).every((d) => d === 0)) {
+                    task._end = date_utils.add(task._end, 24, 'hour');
+                }
             }
 
             // invalid flag
@@ -181,33 +230,78 @@ export default class Gantt {
                 task.invalid = true;
             }
 
-            // dependencies
-            if (typeof task.dependencies === 'string' || !task.dependencies) {
+            // Map other properties
+            task.name = get_task_value(original_task_data, 'name');
+            task.id = get_task_value(original_task_data, 'id');
+            task.progress = get_task_value(original_task_data, 'progress');
+            let dependencies = get_task_value(original_task_data, 'dependencies');
+            task.custom_class = get_task_value(original_task_data, 'custom_class');
+            task.important = get_task_value(original_task_data, 'important');
+            task.repeating = get_task_value(original_task_data, 'repeating');
+            task.frequency = get_task_value(original_task_data, 'frequency');
+            task.until = get_task_value(original_task_data, 'until');
+            task.thumbnail = get_task_value(original_task_data, 'thumbnail');
+
+
+            // Process dependencies
+            if (typeof dependencies === 'string' || !dependencies) {
                 let deps = [];
-                if (task.dependencies) {
-                    deps = task.dependencies
+                if (dependencies) {
+                    deps = dependencies
                         .split(',')
                         .map((d) => d.trim().replaceAll(' ', '_'))
                         .filter((d) => d);
                 }
                 task.dependencies = deps;
+            } else if (Array.isArray(dependencies)) {
+                task.dependencies = dependencies.map(d => String(d).trim().replaceAll(' ', '_')).filter(d => d);
+            } else {
+                task.dependencies = [];
             }
+
 
             // uids
             if (!task.id) {
-                task.id = generate_id(task);
+                task.id = generate_id(task); // generate_id might need original_task_data if name isn't mapped yet
             } else if (typeof task.id === 'string') {
                 task.id = task.id.replaceAll(' ', '_');
             } else {
                 task.id = `${task.id}`;
             }
+            // Ensure name is available for ID generation if ID is missing
+            if (!get_task_value(original_task_data, 'id') && !task.name) {
+                 task.name = "Untitled Task " + (i+1); // Fallback name if original name is also missing
+            }
+
 
             // Add the repeating flag
             task.repeating = task.repeating || false;
             if(task.repeating) {
-                task.frequency = task.frequency || '30'; // 30 days as adefault
+                task.frequency = task.frequency || '30'; // 30 days as default
                 task.until = task.until || null; // it will render the next 4 occurences by default
             }
+
+            // Preserve original data if needed, or specific unmapped properties
+            // For now, the new `task` object will only contain explicitly mapped/handled properties
+            // and the internal `_start`, `_end`, `_index`.
+            // If you need to pass all original_task_data properties through, you could do:
+            // task = { ...original_task_data, ...task };
+            // However, this might overwrite mapped values if original_task_data has 'name', 'id' etc.
+            // A safer way is to copy unmapped properties:
+            for (const key in original_task_data) {
+                if (!this.options.property_map[key] && task[key] === undefined) {
+                     // If the key is not a source for any mapping AND not already set on task
+                     let isMappedSource = false;
+                     for(const map_key in this.options.property_map){
+                         if(this.options.property_map[map_key] === key){
+                             isMappedSource = true;
+                             break;
+                         }
+                     }
+                     if(!isMappedSource) task[key] = original_task_data[key];
+                }
+            }
+
 
             return task;
         });
@@ -225,8 +319,14 @@ export default class Gantt {
         }
     }
 
-    refresh(tasks) {
-        this.setup_tasks(tasks);
+    refresh(raw_tasks_data) {
+        if (raw_tasks_data) {
+            // setup_tasks will update this._tasks internally with processed tasks
+            this.setup_tasks(raw_tasks_data);
+        }
+        // Always re-render with the current (potentially updated in this._tasks)
+        // by calling change_view_mode which calls render().
+        // render() uses this.tasks (the getter for this._tasks).
         this.change_view_mode();
     }
 

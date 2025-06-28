@@ -68,7 +68,55 @@ var gantt = new Gantt('#gantt', tasks, {
     view_mode: 'Day',
     date_format: 'YYYY-MM-DD',
     language: 'en', // or 'es', 'it', 'ru', 'ptBr', 'fr', 'tr', 'zh', 'de', 'hu'
-    popup: null,
+    popup: null, // Custom function to return HTML for the popup
+    property_map: { // Optional: map your task data properties to gantt properties
+        // id: 'my_id_field',
+        // name: 'my_name_field',
+        // start: 'my_start_date_field',
+        // end: 'my_end_date_field',
+        // progress: 'my_progress_field',
+        // dependencies: 'my_dependency_field',
+        // custom_class: 'my_custom_class_field',
+        // important: 'my_important_flag_field',
+        // repeating: 'my_repeating_field',
+        // frequency: 'my_frequency_field',
+        // until: 'my_until_field',
+        // thumbnail: 'my_thumbnail_field'
+    },
+    auto_refresh_on_reassign: false // Optional: if true, re-renders the chart if gantt.tasks is reassigned
+});
+```
+
+**Example with `property_map`:**
+
+If your task objects look like this:
+
+```js
+var my_tasks = [
+  {
+    task_id: 'T1',
+    title: 'My Awesome Task',
+    begin_date: '2023-01-10',
+    finish_date: '2023-01-15',
+    completion: 50,
+    linked_tasks: 'T2' // Can also be an array: ['T2', 'T3']
+  },
+  // ...
+];
+```
+
+You can initialize Gantt like this:
+
+```js
+var gantt = new Gantt("#gantt", my_tasks, {
+    property_map: {
+        id: 'task_id',
+        name: 'title',
+        start: 'begin_date',
+        end: 'finish_date',
+        progress: 'completion',
+        dependencies: 'linked_tasks'
+    }
 });
 ```
 
