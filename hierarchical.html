@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <title>Hierarchical Gantt Demo</title>
+        <link rel="stylesheet" href="../../dist/frappe-gantt.css" />
+        <script src="../../dist/frappe-gantt.umd.js"></script>
+        <style>
+            body { font-family: sans-serif; padding: 20px; }
+            .container { width: 90%; margin: 0 auto; }
+            h2 { margin-bottom: 20px; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h2>Hierarchical Gantt Chart</h2>
+            <div id="gantt"></div>
+        </div>
+        <script>
+            const tasks = [
+                {
+                    id: 'Project',
+                    name: 'New Project',
+                    start: '2023-01-01',
+                    end: '2023-01-15',
+                    progress: 20,
+                    type: 'summary'
+                },
+                {
+                    id: 'Design',
+                    name: 'Design Phase',
+                    start: '2023-01-01',
+                    end: '2023-01-05',
+                    progress: 50,
+                    parentId: 'Project'
+                },
+                {
+                    id: 'Dev',
+                    name: 'Development Phase',
+                    start: '2023-01-05',
+                    end: '2023-01-12',
+                    progress: 10,
+                    parentId: 'Project'
+                },
+                {
+                    id: 'Testing',
+                    name: 'Testing',
+                    start: '2023-01-13',
+                    end: '2023-01-15',
+                    progress: 0,
+                    parentId: 'Project'
+                }
+            ];
+
+            const gantt = new Gantt('#gantt', tasks, {
+                header_height: 50,
+                column_width: 30,
+                step: 24,
+                view_modes: ['Quarter Day', 'Half Day', 'Day', 'Week', 'Month'],
+                bar_height: 20,
+                bar_corner_radius: 3,
+                arrow_curve: 5,
+                padding: 18,
+                view_mode: 'Day',
+                date_format: 'YYYY-MM-DD',
+                custom_popup_html: null
+            });
+            console.log("Gantt initialized");
+        </script>
+    </body>
+</html>

@@ -3,11 +3,88 @@
 .gantt-container {
     line-height: 14.5px;
     position: relative;
-    overflow: auto;
+    /* overflow: auto;  Removed, as we handle scrolling in sub-views now */
     font-size: 12px;
     height: var(--gv-grid-height);
     width: 100%;
     border-radius: 8px;
+    background-color: white; /* Ensure background */
+
+    & .gantt-split-wrapper {
+        display: flex;
+        height: 100%;
+        overflow: hidden; /* Container itself shouldn't scroll */
+    }
+
+    & .gantt-side-view {
+        width: 200px; /* Configurable? */
+        flex-shrink: 0;
+        border-right: 1px solid var(--g-border-color);
+        display: flex;
+        flex-direction: column;
+        background-color: white;
+    }
+
+    & .gantt-main-view {
+        flex-grow: 1;
+        overflow: auto; /* Scrollable */
+        position: relative;
+    }
+
+    /* Side View Styles */
+    & .gantt-side-header-row {
+        border-bottom: 1px solid var(--g-row-border-color);
+        background-color: var(--g-header-background);
+        display: flex;
+        align-items: center;
+        padding-left: 10px;
+        font-weight: bold;
+        color: var(--g-text-muted);
+        box-sizing: border-box; /* Include padding/border in height */
+    }
+
+    & .gantt-side-content {
+        overflow: hidden; /* Synced via JS */
+        flex-grow: 1;
+    }
+
+    & .gantt-side-row {
+        display: flex;
+        align-items: center;
+        border-bottom: 1px solid var(--g-row-border-color); /* To match grid rows if they have borders, mostly just nice */
+        box-sizing: border-box;
+        padding-right: 5px;
+
+        &:hover {
+             background-color: #f5f5f5;
+        }
+    }
+
+    & .gantt-side-indent {
+        flex-shrink: 0;
+    }
+
+    & .gantt-side-toggle {
+        width: 16px;
+        text-align: center;
+        cursor: pointer;
+        user-select: none;
+        color: var(--g-text-muted);
+        font-size: 10px;
+        margin-right: 4px;
+
+        &.has-children:hover {
+            color: var(--g-text-dark);
+        }
+    }
+
+    & .gantt-side-text {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        color: var(--g-text-dark);
+    }
+
 
     & .popup-wrapper {
         position: absolute;
@@ -77,6 +154,7 @@
         left: 0;
         border-bottom: 1px solid var(--g-row-border-color);
         z-index: 1000;
+        /* Ensure header covers scrolling content */
     }
 
     & .lower-text,
@@ -272,6 +350,18 @@
         stroke: var(--g-bar-border);
         stroke-width: 0;
         transition: stroke-width 0.3s ease;
+    }
+
+    & .bar-summary-rect {
+        fill: #666; /* default dark grey */
+        stroke: #333;
+        stroke-width: 1;
+    }
+
+    & .bar-summary-bracket {
+        fill: none;
+        stroke: #333;
+        stroke-width: 2;
     }
 
     & .bar-progress {

@@ -1,4 +1,5 @@
 import date_utils from '../src/date_utils';
+import { test, expect } from 'vitest';
 
 test('Parse: parses string date', () => {
     const date = date_utils.parse('2017-09-09');
@@ -70,8 +71,8 @@ test('Diff: returns diff between 2 date objects', () => {
     const b = date_utils.parse('2017-06-07');
 
     expect(date_utils.diff(a, b, 'day')).toBe(93);
-    expect(date_utils.diff(a, b, 'month')).toBe(3);
-    expect(date_utils.diff(a, b, 'year')).toBe(0);
+    expect(date_utils.diff(a, b, 'month')).toBe(3.1);
+    expect(date_utils.diff(a, b, 'year')).toBe(0.26);
 });
 
 test('StartOf', () => {

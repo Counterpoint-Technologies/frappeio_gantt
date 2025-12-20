@@ -12,10 +12,12 @@ export default class Bar {
     refresh() {
         this.bar_group.innerHTML = '';
         this.handle_group.innerHTML = '';
+        this.group.classList = ['bar-wrapper'];
         if (this.task.custom_class) {
             this.group.classList.add(this.task.custom_class);
-        } else {
-            this.group.classList = ['bar-wrapper'];
+        }
+        if (this.task.type === 'summary') {
+            this.group.classList.add('bar-summary');
         }
 
         this.prepare_values();
@@ -34,7 +36,8 @@ export default class Bar {
         this.group = createSVG('g', {
             class:
                 'bar-wrapper' +
-                (this.task.custom_class ? ' ' + this.task.custom_class : ''),
+                (this.task.custom_class ? ' ' + this.task.custom_class : '') +
+                (this.task.type === 'summary' ? ' bar-summary' : ''),
             'data-id': this.task.id,
         });
         this.bar_group = createSVG('g', {
@@ -90,14 +93,24 @@ export default class Bar {
     }
 
     draw() {
-        this.draw_bar();
-        this.draw_progress_bar();
+        if (this.task.type === 'summary') {
+            this.draw_summary_bar();
+        } else {
+            this.draw_bar();
+            this.draw_progress_bar();
+        }
+
         if (this.gantt.options.show_expected_progress) {
             this.prepare_expected_progress_values();
             this.draw_expected_progress_bar();
         }
         this.draw_label();
-        this.draw_resize_handles();
+
+        // Summary bars typically don't have drag handles in basic implementation,
+        // but let's keep them if not readonly for now.
+        if (this.task.type !== 'summary') {
+            this.draw_resize_handles();
+        }
 
         if (this.task.thumbnail) {
             this.draw_thumbnail();
@@ -123,8 +136,41 @@ export default class Bar {
         }
     }
 
+    draw_summary_bar() {
+        // Draw bracket style or just a different colored bar
+        // For simplicity, let's draw a thinner bar with brackets
+
+        const h = this.height / 3;
+        const y = this.y + (this.height - h) / 2;
+
+        // Main bar
+        this.$bar = createSVG('rect', {
+            x: this.x,
+            y: y,
+            width: this.width,
+            height: h,
+            rx: 0,
+            ry: 0,
+            class: 'bar-summary-rect',
+            append_to: this.bar_group,
+        });
+
+        // Brackets
+        createSVG('path', {
+            d: `M ${this.x} ${this.y + this.height} v -${this.height} M ${this.x + this.width} ${this.y + this.height} v -${this.height}`,
+            class: 'bar-summary-bracket',
+            append_to: this.bar_group
+        });
+
+        if (this.task.color) this.$bar.style.fill = this.task.color;
+        animateSVG(this.$bar, 'width', 0, this.width);
+    }
+
     draw_expected_progress_bar() {
         if (this.invalid) return;
+        // Don't draw expected progress for summary for now
+        if (this.task.type === 'summary') return;
+
         this.$expected_bar_progress = createSVG('rect', {
             x: this.x,
             y: this.y,
@@ -670,6 +716,8 @@ export default class Bar {
 
     update_progressbar_position() {
         if (this.invalid || this.gantt.options.readonly) return;
+        if (this.task.type === 'summary') return;
+
         this.$bar_progress.setAttribute('x', this.$bar.getX());
 
         this.$bar_progress.setAttribute(
@@ -717,6 +765,8 @@ export default class Bar {
 
     update_handle_position() {
         if (this.invalid || this.gantt.options.readonly) return;
+        if (this.task.type === 'summary') return;
+
         const bar = this.$bar;
         this.handle_group
             .querySelector('.handle.left')

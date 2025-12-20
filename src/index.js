@@ -4,6 +4,8 @@ import { $, createSVG } from './svg_utils';
 import Arrow from './arrow';
 import Bar from './bar';
 import Popup from './popup';
+import TaskModel from './model/task_model';
+import SideView from './ui/side_view';
 
 import { DEFAULT_OPTIONS, DEFAULT_VIEW_MODES } from './defaults';
 
@@ -63,7 +65,21 @@ export default class Gantt {
             append_to: this.$svg.parentElement,
         });
 
-        this.$container.appendChild(this.$svg);
+        // Split Wrapper
+        this.$split_wrapper = this.create_el({
+            classes: 'gantt-split-wrapper',
+            append_to: this.$container,
+        });
+
+        // Main View Wrapper (right side)
+        this.$main_view = this.create_el({
+            classes: 'gantt-main-view',
+            append_to: this.$split_wrapper
+        });
+
+        // Move SVG into main view
+        this.$main_view.appendChild(this.$svg);
+
         this.$popup_wrapper = this.create_el({
             classes: 'popup-wrapper',
             append_to: this.$container,
@@ -138,85 +154,8 @@ export default class Gantt {
     }
 
     setup_tasks(tasks) {
-        this.tasks = tasks
-            .map((task, i) => {
-                if (!task.start) {
-                    console.error(
-                        `task "${task.id}" doesn't have a start date`,
-                    );
-                    return false;
-                }
-
-                task._start = date_utils.parse(task.start);
-                if (task.end === undefined && task.duration !== undefined) {
-                    task.end = task._start;
-                    let durations = task.duration.split(' ');
-
-                    durations.forEach((tmpDuration) => {
-                        let { duration, scale } =
-                            date_utils.parse_duration(tmpDuration);
-                        task.end = date_utils.add(task.end, duration, scale);
-                    });
-                }
-                if (!task.end) {
-                    console.error(`task "${task.id}" doesn't have an end date`);
-                    return false;
-                }
-                task._end = date_utils.parse(task.end);
-
-                let diff = date_utils.diff(task._end, task._start, 'year');
-                if (diff < 0) {
-                    console.error(
-                        `start of task can't be after end of task: in task "${task.id}"`,
-                    );
-                    return false;
-                }
-
-                // make task invalid if duration too large
-                if (date_utils.diff(task._end, task._start, 'year') > 10) {
-                    console.error(
-                        `the duration of task "${task.id}" is too long (above ten years)`,
-                    );
-                    return false;
-                }
-
-                // cache index
-                task._index = i;
-
-                // if hours is not set, assume the last day is full day
-                // e.g: 2018-09-09 becomes 2018-09-09 23:59:59
-                const task_end_values = date_utils.get_date_values(task._end);
-                if (task_end_values.slice(3).every((d) => d === 0)) {
-                    task._end = date_utils.add(task._end, 24, 'hour');
-                }
-
-                // dependencies
-                if (
-                    typeof task.dependencies === 'string' ||
-                    !task.dependencies
-                ) {
-                    let deps = [];
-                    if (task.dependencies) {
-                        deps = task.dependencies
-                            .split(',')
-                            .map((d) => d.trim().replaceAll(' ', '_'))
-                            .filter((d) => d);
-                    }
-                    task.dependencies = deps;
-                }
-
-                // uids
-                if (!task.id) {
-                    task.id = generate_id(task);
-                } else if (typeof task.id === 'string') {
-                    task.id = task.id.replaceAll(' ', '_');
-                } else {
-                    task.id = `${task.id}`;
-                }
-
-                return task;
-            })
-            .filter((t) => t);
+        this.model = new TaskModel(tasks, this.options);
+        this.tasks = this.model.getVisibleTasks();
         this.setup_dependencies();
     }
 
@@ -235,11 +174,25 @@ export default class Gantt {
         this.change_view_mode();
     }
 
+    toggle_collapse(id) {
+        if (this.model.toggleCollapse(id)) {
+            this.tasks = this.model.getVisibleTasks();
+            this.setup_dependencies(); // Rebuild dependency map for visible tasks
+            this.change_view_mode(undefined, true); // Re-render maintaining pos
+        }
+    }
+
     update_task(id, new_details) {
         let task = this.tasks.find((t) => t.id === id);
-        let bar = this.bars[task._index];
+        // If task is not visible, find it in model
+        if (!task) {
+             task = this.model.getTask(id);
+        }
+
         Object.assign(task, new_details);
-        bar.refresh();
+        // Re-compute model logic if needed
+        // For now, simple refresh
+        this.refresh(this.model.tasks);
     }
 
     change_view_mode(mode = this.options.view_mode, maintain_pos = false) {
@@ -248,7 +201,7 @@ export default class Gantt {
         }
         let old_pos, old_scroll_op;
         if (maintain_pos) {
-            old_pos = this.$container.scrollLeft;
+            old_pos = this.$main_view.scrollLeft;
             old_scroll_op = this.options.scroll_to;
             this.options.scroll_to = null;
         }
@@ -258,7 +211,7 @@ export default class Gantt {
         this.setup_dates(maintain_pos);
         this.render();
         if (maintain_pos) {
-            this.$container.scrollLeft = old_pos;
+            this.$main_view.scrollLeft = old_pos;
             this.options.scroll_to = old_scroll_op;
         }
         this.trigger_event('view_change', [mode]);
@@ -373,6 +326,7 @@ export default class Gantt {
         this.make_bars();
         this.make_arrows();
         this.map_arrows_on_bars();
+        this.make_side_view(); // Render Side View
         this.set_dimensions();
         this.set_scroll_position(this.options.scroll_to);
     }
@@ -389,7 +343,7 @@ export default class Gantt {
         }
         this.$extras = this.create_el({
             classes: 'extras',
-            append_to: this.$container,
+            append_to: this.$main_view, // Change to main_view
         });
         this.$adjust = this.create_el({
             classes: 'adjust hide',
@@ -469,7 +423,7 @@ export default class Gantt {
         this.$header = this.create_el({
             width: this.dates.length * this.config.column_width,
             classes: 'grid-header',
-            append_to: this.$container,
+            append_to: this.$main_view, // Append to main_view so it scrolls with it
         });
 
         this.$upper_header = this.create_el({
@@ -483,6 +437,12 @@ export default class Gantt {
     }
 
     make_side_header() {
+        // The old side header was inside the grid header (top-left absolute).
+        // Since we now have a separate side view, we might want to move this.
+        // Or keep it as "Today" / "Mode" controls.
+        // If we keep it in $upper_header, it will scroll away.
+        // Let's keep it there for now, but maybe in Phase 2 move controls to a toolbar.
+
         this.$side_header = this.create_el({ classes: 'side-header' });
         this.$upper_header.prepend(this.$side_header);
 
@@ -524,6 +484,11 @@ export default class Gantt {
             this.$side_header.prepend($today_button);
             this.$today_button = $today_button;
         }
+    }
+
+    make_side_view() {
+        this.side_view = new SideView(this, this.options);
+        this.side_view.render();
     }
 
     make_grid_ticks() {
@@ -704,7 +669,7 @@ export default class Gantt {
             left,
             height: this.grid_height - this.config.header_height,
             classes: 'current-highlight',
-            append_to: this.$container,
+            append_to: this.$main_view, // Change to main_view
         });
         this.$current_ball_highlight = this.create_el({
             top: this.config.header_height - 6,
@@ -922,7 +887,7 @@ export default class Gantt {
     set_scroll_position(date) {
         if (this.options.infinite_padding && (!date || date === 'start')) {
             let [min_start, ..._] = this.get_start_end_positions();
-            this.$container.scrollLeft = min_start;
+            this.$main_view.scrollLeft = min_start;
             return;
         }
         if (!date || date === 'start') {
@@ -946,7 +911,7 @@ export default class Gantt {
             (units_since_first_task / this.config.step) *
             this.config.column_width;
 
-        this.$container.scrollTo({
+        this.$main_view.scrollTo({
             left: scroll_pos - this.config.column_width / 6,
             behavior: 'smooth',
         });
@@ -958,7 +923,7 @@ export default class Gantt {
 
         this.current_date = date_utils.add(
             this.gantt_start,
-            this.$container.scrollLeft / this.config.column_width,
+            this.$main_view.scrollLeft / this.config.column_width,
             this.config.unit,
         );
 
@@ -974,7 +939,7 @@ export default class Gantt {
         // Recalculate
         this.current_date = date_utils.add(
             this.gantt_start,
-            (this.$container.scrollLeft + $el.clientWidth) /
+            (this.$main_view.scrollLeft + $el.clientWidth) /
                 this.config.column_width,
             this.config.unit,
         );
@@ -1156,8 +1121,8 @@ export default class Gantt {
 
         if (this.options.infinite_padding) {
             let extended = false;
-            $.on(this.$container, 'mousewheel', (e) => {
-                let trigger = this.$container.scrollWidth / 2;
+            $.on(this.$main_view, 'mousewheel', (e) => { // Change to main_view
+                let trigger = this.$main_view.scrollWidth / 2;
                 if (!extended && e.currentTarget.scrollLeft <= trigger) {
                     let old_scroll_left = e.currentTarget.scrollLeft;
                     extended = true;
@@ -1197,7 +1162,7 @@ export default class Gantt {
             });
         }
 
-        $.on(this.$container, 'scroll', (e) => {
+        $.on(this.$main_view, 'scroll', (e) => { // Change to main_view
             let localBars = [];
             const ids = this.bars.map(({ group }) =>
                 group.getAttribute('data-id'),
@@ -1205,6 +1170,11 @@ export default class Gantt {
             let dx;
             if (x_on_scroll_start) {
                 dx = e.currentTarget.scrollLeft - x_on_scroll_start;
+            }
+
+            // SYNC SCROLL SIDE VIEW
+            if (this.side_view) {
+                this.side_view.sync_scroll(e.currentTarget.scrollTop);
             }
 
             // Calculate current scroll position's upper text
@@ -1257,7 +1227,7 @@ export default class Gantt {
                 this.$adjust.innerHTML = '&larr;';
                 this.$adjust.classList.remove('hide');
                 this.$adjust.onclick = () => {
-                    this.$container.scrollTo({
+                    this.$main_view.scrollTo({
                         left: max_start,
                         behavior: 'smooth',
                     });
@@ -1269,7 +1239,7 @@ export default class Gantt {
                 this.$adjust.innerHTML = '&rarr;';
                 this.$adjust.classList.remove('hide');
                 this.$adjust.onclick = () => {
-                    this.$container.scrollTo({
+                    this.$main_view.scrollTo({
                         left: min_start,
                         behavior: 'smooth',
                     });
